@@ -1,0 +1,27 @@
+Array
+(
+    [0] => Array
+        (
+            [pack_id] => 7
+            [pack_name] =>  Coastal Karachi Getaway
+        )
+
+    [1] => Array
+        (
+            [pack_id] => 11
+            [pack_name] => Ultimate Karachi Experience
+        )
+
+    [2] => Array
+        (
+            [pack_id] => 27
+            [pack_name] => new
+        )
+
+    [3] => Array
+        (
+            [pack_id] => 28
+            [pack_name] => new
+        )
+
+)

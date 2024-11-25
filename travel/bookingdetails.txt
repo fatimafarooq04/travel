@@ -1,0 +1,249 @@
+<?php
+session_start();
+require "connection.php"; // Database connection
+
+// Check if user is logged in
+if (!isset($_SESSION['UserID'])) {
+    header("Location: login.php");
+    exit;
+}
+
+$user_id = $_SESSION['UserID'];
+
+// Handle package booking cancellation request
+if (isset($_POST['cancel_package_booking_id'])) {
+    $booking_id = $_POST['cancel_package_booking_id'];
+
+    // Check if the booking exists and the date is still valid for cancellation
+    $check_query = "
+        SELECT pb.booking_id, tp.start_date, pb.status
+        FROM package_booking pb
+        JOIN tour_package_dates tp ON pb.date_range_id = tp.id
+        WHERE pb.booking_id = ? AND pb.userid = ?
+    ";
+    $check_stmt = $conn->prepare($check_query);
+    $check_stmt->bind_param('ii', $booking_id, $user_id);
+    $check_stmt->execute();
+    $check_result = $check_stmt->get_result();
+
+    if ($check_result->num_rows > 0) {
+        $row = $check_result->fetch_assoc();
+        $start_date = new DateTime($row['start_date']);
+        $today = new DateTime();
+        $current_status = $row['status'];
+
+        // Check if the package start date is after today and the current status is "Pending" or "Confirm"
+        if ($start_date > $today && in_array($current_status, ['Pending', 'Confirm'])) {
+            $update_query = "UPDATE package_booking SET status = 'Canceled' WHERE booking_id = ? AND userid = ?";
+            $update_stmt = $conn->prepare($update_query);
+            $update_stmt->bind_param('ii', $booking_id, $user_id);
+            if ($update_stmt->execute()) {
+                $message = "Your package booking has been successfully cancelled.";
+            } else {
+                $message = "Failed to update booking status.";
+            }
+        } else {
+            $message = "You cannot cancel a booking that has already started or is not in a cancellable state.";
+        }
+    } else {
+        $message = "Booking not found or you don't have permission to cancel it.";
+    }
+}
+
+// Handle hotel booking cancellation request
+if (isset($_POST['cancel_hotel_booking_id'])) {
+    $booking_id = $_POST['cancel_hotel_booking_id'];
+
+    // Check if the booking exists and the date is still valid for cancellation
+    $check_query = "
+        SELECT hb.booking_id, hb.booking_date, hb.status
+        FROM hotel_booking hb
+        WHERE hb.booking_id = ? AND hb.user_id = ?
+    ";
+    $check_stmt = $conn->prepare($check_query);
+    $check_stmt->bind_param('ii', $booking_id, $user_id);
+    $check_stmt->execute();
+    $check_result = $check_stmt->get_result();
+
+    if ($check_result->num_rows > 0) {
+        $row = $check_result->fetch_assoc();
+        $booking_date = new DateTime($row['booking_date']);
+        $today = new DateTime();
+        $current_status = $row['status'];
+
+        // Check if the hotel booking date is after today and the current status is "Pending" or "Confirm"
+        if ($booking_date > $today && in_array($current_status, ['Pending', 'Confirm'])) {
+            $update_query = "UPDATE hotel_booking SET status = 'Canceled' WHERE booking_id = ? AND user_id = ?";
+            $update_stmt = $conn->prepare($update_query);
+            $update_stmt->bind_param('ii', $booking_id, $user_id);
+            if ($update_stmt->execute()) {
+                $message = "Your hotel booking has been successfully cancelled.";
+            } else {
+                $message = "Failed to update booking status.";
+            }
+        } else {
+            $message = "You cannot cancel a booking that has already started or is not in a cancellable state.";
+        }
+    } else {
+        $message = "Booking not found or you don't have permission to cancel it.";
+    }
+}
+
+// Fetch package bookings for the logged-in user
+$package_booking_query = "
+    SELECT pb.booking_id, pb.message, pb.booking_date, pb.status, tc.pack_name, tc.pack_price, tp.start_date, tp.end_date, h.Name AS hotel_name, h.Address AS hotel_address, h.ContactInfo AS hotel_contact
+    FROM package_booking pb
+    JOIN tour_card tc ON pb.package_id = tc.pack_id
+    JOIN tour_package_dates tp ON pb.date_range_id = tp.id
+    JOIN hotel h ON tc.HotelID = h.HotelID
+    WHERE pb.userid = ?
+";
+$package_booking_stmt = $conn->prepare($package_booking_query);
+$package_booking_stmt->bind_param('i', $user_id);
+$package_booking_stmt->execute();
+$package_booking_result = $package_booking_stmt->get_result();
+
+// Fetch hotel bookings for the logged-in user
+$hotel_booking_query = "
+    SELECT hb.booking_id, hb.name, hb.address, hb.email, hb.phone, hb.city, hb.postalCode, hb.paymentMethod, hb.booking_date, hb.status, h.Name AS hotel_name, r.Price AS room_price, rt.Name AS room_type
+    FROM hotel_booking hb
+    JOIN hotel h ON hb.hotelID = h.HotelID
+    JOIN room r ON hb.roomID = r.RoomID
+    JOIN room_type rt ON r.RoomTypeID = rt.RoomTypeID
+    WHERE hb.user_id = ?
+";
+$hotel_booking_stmt = $conn->prepare($hotel_booking_query);
+$hotel_booking_stmt->bind_param('i', $user_id);
+$hotel_booking_stmt->execute();
+$hotel_booking_result = $hotel_booking_stmt->get_result();
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Bookings</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <style>
+        .card-header {
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="text-center">My Bookings</h1>
+
+        <?php if (isset($message)): ?>
+            <div class="alert alert-info"><?php echo htmlspecialchars($message); ?></div>
+        <?php endif; ?>
+
+        <ul class="nav nav-tabs" id="myTab" role="tablist">
+            <li class="nav-item">
+                <a class="nav-link active" id="package-tab" data-toggle="tab" href="#package" role="tab" aria-controls="package" aria-selected="true">Package Bookings</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="hotel-tab" data-toggle="tab" href="#hotel" role="tab" aria-controls="hotel" aria-selected="false">Hotel Bookings</a>
+            </li>
+        </ul>
+        <div class="tab-content mt-3" id="myTabContent">
+            <!-- Package Bookings Tab -->
+            <div class="tab-pane fade show active" id="package" role="tabpanel" aria-labelledby="package-tab">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Booking ID</th>
+                            <th>Package Name</th>
+                            <th>Start Date</th>
+                            <th>End Date</th>
+                            <th>Price</th>
+                            <th>Booking Date</th>
+                            <th>Status</th>
+                            <th>Message</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if ($package_booking_result->num_rows > 0): ?>
+                            <?php while ($row = $package_booking_result->fetch_assoc()): ?>
+                                <tr>
+                                    <td><?php echo htmlspecialchars($row['booking_id']); ?></td>
+                                    <td><?php echo htmlspecialchars($row['pack_name']); ?></td>
+                                    <td><?php echo htmlspecialchars($row['start_date']); ?></td>
+                                    <td><?php echo htmlspecialchars($row['end_date']); ?></td>
+                                    <td>$<?php echo htmlspecialchars($row['pack_price']); ?></td>
+                                    <td><?php echo htmlspecialchars($row['booking_date']); ?></td>
+                                    <td><?php echo htmlspecialchars($row['status']); ?></td>
+                                    <td><?php echo htmlspecialchars($row['message']); ?></td>
+                                    <td>
+                                        <?php if (new DateTime($row['start_date']) > new DateTime() && in_array($row['status'], ['Pending', 'Confirm'])): ?>
+                                            <form method="post" class="d-inline">
+                                                <input type="hidden" name="cancel_package_booking_id" value="<?php echo htmlspecialchars($row['booking_id']); ?>">
+                                                <button type="submit" class="btn btn-danger btn-sm">Cancel</button>
+                                            </form>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endwhile; ?>
+                        <?php else: ?>
+                            <tr><td colspan="9" class="text-center">No package bookings found.</td></tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+            <!-- Hotel Bookings Tab -->
+            <div class="tab-pane fade" id="hotel" role="tabpanel" aria-labelledby="hotel-tab">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Booking ID</th>
+                            <th>Hotel Name</th>
+                            <th>Address</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>City</th>
+                            <th>Postal Code</th>
+                            <th>Payment Method</th>
+                            <th>Booking Date</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if ($hotel_booking_result->num_rows > 0): ?>
+                            <?php while ($row = $hotel_booking_result->fetch_assoc()): ?>
+                                <tr>
+                                    <td><?php echo htmlspecialchars($row['booking_id']); ?></td>
+                                    <td><?php echo htmlspecialchars($row['hotel_name']); ?></td>
+                                    <td><?php echo htmlspecialchars($row['address']); ?></td>
+                                    <td><?php echo htmlspecialchars($row['email']); ?></td>
+                                    <td><?php echo htmlspecialchars($row['phone']); ?></td>
+                                    <td><?php echo htmlspecialchars($row['city']); ?></td>
+                                    <td><?php echo htmlspecialchars($row['postalCode']); ?></td>
+                                    <td><?php echo htmlspecialchars($row['paymentMethod']); ?></td>
+                                    <td><?php echo htmlspecialchars($row['booking_date']); ?></td>
+                                    <td><?php echo htmlspecialchars($row['status']); ?></td>
+                                    <td>
+                                        <?php if (new DateTime($row['booking_date']) > new DateTime() && in_array($row['status'], ['Pending', 'Confirm'])): ?>
+                                            <form method="post" class="d-inline">
+                                                <input type="hidden" name="cancel_hotel_booking_id" value="<?php echo htmlspecialchars($row['booking_id']); ?>">
+                                                <button type="submit" class="btn btn-danger btn-sm">Cancel</button>
+                                            </form>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endwhile; ?>
+                        <?php else: ?>
+                            <tr><td colspan="11" class="text-center">No hotel bookings found.</td></tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

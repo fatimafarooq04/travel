@@ -1,0 +1,315 @@
+<?php
+require "connection.php";
+require "header.php";
+
+// Fetch city data from the database
+$sql = "SELECT CityID, CityName FROM city";
+$result = mysqli_query($conn, $sql);
+
+// Initialize an array to store city options
+$cityOptions = [];
+if (mysqli_num_rows($result) > 0) {
+    while ($row = mysqli_fetch_assoc($result)) {
+        $cityID = $row['CityID'];
+        $cityName = $row['CityName'];
+        $cityOptions[] = ['id' => $cityID, 'name' => $cityName];
+    }
+}
+?>
+<!-- Header Start -->
+<div class="container-fluid page-header">
+    <div class="container">
+        <div class="d-flex flex-column align-items-center justify-content-center" style="min-height: 400px">
+            <h3 class="display-4 text-white text-uppercase">Hotels</h3>
+            <div class="d-inline-flex text-white">
+                <p class="m-0 text-uppercase"><a class="text-white" href="">Home</a></p>
+                <i class="fa fa-angle-double-right pt-1 px-3"></i>
+                <p class="m-0 text-uppercase">Hotels</p>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Header End -->
+ <!-- Booking Start -->
+<div class="container-fluid booking mt-5 pb-5">
+    <div class="container pb-5">
+        <div class="bg-light shadow" style="padding: 30px;">
+            <div class="row align-items-center" style="min-height: 60px;">
+                <div class="col-md-10">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="mb-3 mb-md-0">
+                                <select class="custom-select px-4" style="height: 47px;">
+                                    <option selected>Destination</option>
+                                    <option value="1">Destination 1</option>
+                                    <option value="2">Destination 1</option>
+                                    <option value="3">Destination 1</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3 mb-md-0">
+                                <div class="date" id="date1" data-target-input="nearest">
+                                    <input type="text" class="form-control p-4 datetimepicker-input"
+                                        placeholder="Depart Date" data-target="#date1" data-toggle="datetimepicker" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3 mb-md-0">
+                                <div class="date" id="date2" data-target-input="nearest">
+                                    <input type="text" class="form-control p-4 datetimepicker-input"
+                                        placeholder="Return Date" data-target="#date2" data-toggle="datetimepicker" />
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3 mb-md-0">
+                                <select class="custom-select px-4" style="height: 47px;">
+                                    <option selected>Duration</option>
+                                    <option value="1">Duration 1</option>
+                                    <option value="2">Duration 1</option>
+                                    <option value="3">Duration 1</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary btn-block" type="submit"
+                        style="height: 47px; margin-top: -2px;">Submit</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Booking End -->
+<!-- Shop Start -->
+<div class="container-fluid pt-5">
+    <div class="row px-xl-5">
+        <!-- Shop Sidebar Start -->
+        <div class="col-lg-3 col-md-12">
+            <!-- Price Start -->
+            <div class="border-bottom mb-4 pb-4">
+                <h5 class="font-weight-semi-bold mb-4">Filter by price</h5>
+                <form id="price-filter-form">
+                    <?php
+                    // Query to fetch distinct price ranges from the room table
+                    $sql = "SELECT MIN(Price) as min_price, MAX(Price) as max_price FROM room";
+                    $result = $conn->query($sql);
+
+                    // Initialize array to store fetched price ranges
+                    $price_ranges = [];
+
+                    if ($result->num_rows > 0) {
+                        $row = $result->fetch_assoc();
+                        $min_price = intval($row['min_price']);
+                        $max_price = intval($row['max_price']);
+
+                        // Determine the number of ranges (for example, divide by 5 for 5 ranges)
+                        $range_count = 5; // You can adjust this based on your preference
+                        
+                        // Calculate range size
+                        $range_size = ceil(($max_price - $min_price) / $range_count);
+
+                        // Generate price ranges
+                        for ($i = 0; $i < $range_count; $i++) {
+                            $start = $min_price + ($i * $range_size);
+                            $end = $start + $range_size;
+                            $price_ranges[] = [$start, $end];
+                        }
+                    }
+
+                    // Initialize range counts
+                    $range_counts = array_fill(0, count($price_ranges), 0);
+
+                    // Query to fetch room counts in each price range
+                    $sql = "SELECT COUNT(*) as count, Price FROM room GROUP BY Price";
+                    $result = $conn->query($sql);
+
+                    // Process fetched data to populate $range_counts
+                    if ($result->num_rows > 0) {
+                        while ($row = $result->fetch_assoc()) {
+                            $price = $row["Price"];
+                            foreach ($price_ranges as $index => $range) {
+                                if ($price >= $range[0] && $price < $range[1]) {
+                                    $range_counts[$index] += $row["count"];
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    // Display checkboxes with counts
+                    foreach ($price_ranges as $index => $range) {
+                        $range_start = $range[0];
+                        $range_end = $range[1];
+                        $count = $range_counts[$index];
+                        ?>
+                        <div class="custom-control custom-checkbox d-flex align-items-center justify-content-between mb-3">
+                            <input type="checkbox" class="custom-control-input price-checkbox"
+                                id="price-<?php echo $index; ?>" data-min="<?php echo $range_start; ?>"
+                                data-max="<?php echo $range_end; ?>" <?php echo ($count > 0) ? '' : ''; ?>>
+                            <label class="custom-control-label" for="price-<?php echo $index; ?>">
+                                $<?php echo $range_start; ?> - $<?php echo $range_end; ?>
+                            </label>
+                            <span class="badge border font-weight-normal"><?php echo $count; ?></span>
+                        </div>
+                    <?php } ?>
+                </form>
+            </div>
+            <!-- Price End -->
+
+            <!-- City Start -->
+            <div class="border-bottom mb-4 pb-4">
+                <h5 class="font-weight-semi-bold mb-4">Filter by city</h5>
+                <form id="city-filter-form">
+                    <?php foreach ($cityOptions as $city) {
+                        // Query to count hotels in each city
+                        $cityID = $city['id'];
+                        $sql = "SELECT COUNT(*) as count FROM hotel WHERE CityID = $cityID";
+                        $result = $conn->query($sql);
+                        $hotelCount = ($result->num_rows > 0) ? $result->fetch_assoc()['count'] : 0;
+                        ?>
+                        <div class="custom-control custom-checkbox d-flex align-items-center justify-content-between mb-3">
+                            <input type="checkbox" class="custom-control-input city-checkbox"
+                                id="city-<?php echo $city['id']; ?>" data-city="<?php echo $city['id']; ?>">
+                            <label class="custom-control-label" for="city-<?php echo $city['id']; ?>">
+                                <?php echo $city['name']; ?>
+                            </label>
+                            <span class="badge border font-weight-normal"><?php echo $hotelCount; ?></span>
+                        </div>
+                    <?php } ?>
+                </form>
+            </div>
+            <!-- City End -->
+        </div>
+        <!-- Shop Sidebar End -->
+
+        <!-- Shop Product Start -->
+        <div class="col-lg-9 col-md-12" id="hotel-list">
+            <?php
+            // Fetch hotel data from the database
+            $query = "SELECT h.HotelID, h.Name AS HotelName, h.Description, h.CardImage, r.Price, h.CityID
+                      FROM hotel h
+                      LEFT JOIN room r ON h.HotelID = r.HotelID";
+            $result = mysqli_query($conn, $query);
+
+            if (mysqli_num_rows($result) > 0) {
+                while ($row = mysqli_fetch_assoc($result)) {
+                    $hotelID = $row['HotelID'];
+                    $hotelName = $row['HotelName'];
+                    $description = $row['Description'];
+                    $cardImage = $row['CardImage'];
+                    $price = $row['Price'];
+                    $cityID = $row['CityID'];
+
+                    // Truncate description to two lines with ellipsis
+                    $truncatedDescription = strlen($description) > 100 ? substr($description, 0, 100) . '...' : $description;
+                    ?>
+
+                    <div class="col-12 pb-4 hotel-item price-<?php echo $price; ?>" data-city="<?php echo $cityID; ?>">
+                        <div class="card product-item border-0 mb-4 shadow-sm">
+                            <div class="row no-gutters">
+                                <div class="col-md-4">
+                                    <img class="card-img-top img-fluid" src="../admin/<?php echo $cardImage; ?>"
+                                        alt="<?php echo $hotelName; ?>" style="height: 200px;">
+                                </div>
+                                <div class="col-md-8">
+                                    <div class="card-body">
+                                        <h5 class="card-title"><?php echo $hotelName; ?></h5>
+                                        <p class="card-text"><?php echo $truncatedDescription; ?></p>
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <h6 class="text-primary">$<?php echo $price; ?></h6>
+                                            <a href="hotelsdetails.php?id=<?php echo $hotelID; ?>"
+                                                class="btn btn-primary">Check More</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                <?php
+                }
+            } else {
+                echo '<p>No hotels found.</p>'; // Handle case where no hotels are found
+            }
+            ?>
+        </div>
+        <!-- Shop Product End -->
+    </div>
+</div>
+<!-- Shop End -->
+
+<?php
+require "footer.php";
+?>
+
+<!-- JavaScript to handle price and city filtering -->
+<script>
+    // Function to update hotel list based on selected price and city filters
+    function updateHotelList() {
+        // Get all checked checkboxes for price and city
+        var checkedPriceBoxes = document.querySelectorAll('.price-checkbox:checked');
+        var checkedCityBoxes = document.querySelectorAll('.city-checkbox:checked');
+        
+        var priceFilters = [];
+        var cityFilters = [];
+
+        // Prepare price filters
+        checkedPriceBoxes.forEach(function (checkbox) {
+            var minPrice = parseInt(checkbox.getAttribute('data-min'));
+            var maxPrice = parseInt(checkbox.getAttribute('data-max'));
+            priceFilters.push([minPrice, maxPrice]);
+        });
+
+        // Prepare city filters
+        checkedCityBoxes.forEach(function (checkbox) {
+            var cityID = parseInt(checkbox.getAttribute('data-city'));
+            cityFilters.push(cityID);
+        });
+
+        // Show or hide hotel items based on both price and city filters
+        var hotelItems = document.querySelectorAll('.hotel-item');
+        hotelItems.forEach(function (item) {
+            var itemPrice = parseInt(item.className.replace(/.*price-/, ''));
+            var itemCity = parseInt(item.getAttribute('data-city'));
+            
+            var showItem = true;
+
+            // Check against price filters
+            if (priceFilters.length > 0) {
+                showItem = false;
+                priceFilters.forEach(function (filter) {
+                    if (itemPrice >= filter[0] && itemPrice < filter[1]) {
+                        showItem = true;
+                    }
+                });
+            }
+
+            // Check against city filters
+            if (cityFilters.length > 0 && showItem) {
+                showItem = cityFilters.includes(itemCity);
+            }
+
+            item.style.display = showItem ? 'block' : 'none';
+        });
+    }
+
+    // Event listeners for checkbox changes
+    var priceCheckboxes = document.querySelectorAll('.price-checkbox');
+    var cityCheckboxes = document.querySelectorAll('.city-checkbox');
+
+    priceCheckboxes.forEach(function (checkbox) {
+        checkbox.addEventListener('change', function () {
+            updateHotelList();
+        });
+    });
+
+    cityCheckboxes.forEach(function (checkbox) {
+        checkbox.addEventListener('change', function () {
+            updateHotelList();
+        });
+    });
+</script>

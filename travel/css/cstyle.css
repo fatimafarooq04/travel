@@ -1,0 +1,46 @@
+*{
+     box-sizing: border-box;
+    font-family: Arial, Helvetica, sans-serif;
+    text-transform:capitalize ;
+}
+.contain{
+    padding-bottom:50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+}
+.contain section{
+    width: 700px;
+    margin: 5px;
+    box-shadow: 0 5px 10px #3334;
+}
+.contain section details summary{
+    padding: 15px;
+    background:#7AB730 ;
+    color: #fff;
+    border: 1px solid #444;
+    position: relative;
+    list-style: none;
+    outline: none;
+    cursor: pointer;
+    font-size: 20px;
+}
+.contain section details p{
+    font-size: 15px;
+    padding: 10px;
+    color: #444;
+    background: #e6ffff;
+}
+.contain section details summary::after{
+    content: '+';
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 30px;
+    color: #fff;
+    transition: .2s linear;
+}
+.contain section details[open] summary::after{
+    transform: rotate(135deg);
+}
